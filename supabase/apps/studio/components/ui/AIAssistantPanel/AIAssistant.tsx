@@ -18,6 +18,7 @@ import { useSendEventMutation } from 'data/telemetry/send-event-mutation'
 import { useLocalStorageQuery } from 'hooks/misc/useLocalStorage'
 import { useOrgAiOptInLevel } from 'hooks/misc/useOrgOptedIntoAi'
 import { useSelectedOrganizationQuery } from 'hooks/misc/useSelectedOrganization'
+import { type Model, PROVIDERS } from 'lib/ai/model.utils'
 import { useSelectedProjectQuery } from 'hooks/misc/useSelectedProject'
 import { useHotKey } from 'hooks/ui/useHotKey'
 import { IS_PLATFORM } from 'lib/constants'
@@ -77,10 +78,27 @@ export const AIAssistant = ({ className }: AIAssistantProps) => {
       return snap.model ?? 'gpt-5-mini'
     }
 
-    const defaultModel: AssistantModel = hasAccessToAdvanceModel ? 'gpt-5' : 'gpt-5-mini'
+    // Get default model based on available providers
+    const getDefaultModel = (): AssistantModel => {
+      // Find the first default model from any provider
+      for (const provider of Object.values(PROVIDERS)) {
+        for (const [modelId, config] of Object.entries(provider.models)) {
+          if (config.default) {
+            return modelId as AssistantModel
+          }
+        }
+      }
+      // Fallback to gpt-5-mini if no default found
+      return 'gpt-5-mini'
+    }
+
+    const defaultModel: AssistantModel = getDefaultModel()
     const model = snap.model ?? defaultModel
 
+    // Enforce entitlement restrictions (currently only for gpt-5)
     if (!hasAccessToAdvanceModel && model === 'gpt-5') {
+      // Find an alternative model that doesn't require advanced access
+      // For now, return gpt-5-mini as fallback
       return 'gpt-5-mini'
     }
 

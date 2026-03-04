@@ -9,6 +9,7 @@ import { proxy, ref, snapshot, subscribe, useSnapshot } from 'valtio'
 import { constructHeaders } from 'data/fetchers'
 import { prepareMessagesForAPI } from 'lib/ai/message-utils'
 import { BASE_PATH, IS_PLATFORM } from 'lib/constants'
+import type { Model } from 'lib/ai/model.utils'
 
 import { LOCAL_STORAGE_KEYS } from 'common'
 import { useSelectedProjectQuery } from 'hooks/misc/useSelectedProject'
@@ -22,7 +23,7 @@ export type AssistantMessageType = MessageType
 
 export type SqlSnippet = string | { label: string; content: string }
 
-export type AssistantModel = 'gpt-5' | 'gpt-5-mini'
+export type AssistantModel = Model
 
 type ChatSession = {
   id: string

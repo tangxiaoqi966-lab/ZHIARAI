@@ -8,6 +8,7 @@ import { generateAssistantResponse } from 'lib/ai/generate-assistant-response'
 import { getModel } from 'lib/ai/model'
 import { getOrgAIDetails } from 'lib/ai/org-ai-details'
 import { getTools } from 'lib/ai/tools'
+import { type Model, getMergedProviders } from 'lib/ai/model.utils'
 import apiWrapper from 'lib/api/apiWrapper'
 import { executeQuery } from 'lib/api/self-hosted/query'
 import { getURL } from 'lib/helpers'
@@ -44,6 +45,20 @@ const wrapper = (req: NextApiRequest, res: NextApiResponse) =>
 
 export default wrapper
 
+// Get all supported model IDs from merged providers (including custom models)
+const getAllModelIds = (): string[] => {
+  const modelIds: string[] = []
+  const mergedProviders = getMergedProviders()
+  Object.values(mergedProviders).forEach((provider) => {
+    if (provider && provider.models) {
+      modelIds.push(...Object.keys(provider.models))
+    }
+  })
+  return modelIds
+}
+
+const ALL_MODEL_IDS = getAllModelIds()
+
 const requestBodySchema = z.object({
   messages: z.array(z.any()),
   projectRef: z.string(),
@@ -53,7 +68,7 @@ const requestBodySchema = z.object({
   chatId: z.string().optional(),
   chatName: z.string().optional(),
   orgSlug: z.string().optional(),
-  model: z.enum(['gpt-5', 'gpt-5-mini']).optional(),
+  model: z.enum(ALL_MODEL_IDS as [string, ...string[]]).optional(),
 })
 
 async function handlePost(req: NextApiRequest, res: NextApiResponse, claims?: JwtPayload) {
@@ -134,8 +149,7 @@ async function handlePost(req: NextApiRequest, res: NextApiResponse, claims?: Jw
     promptProviderOptions,
     providerOptions,
   } = await getModel({
-    provider: 'openai',
-    model: requestedModel ?? 'gpt-5',
+    model: requestedModel as Model | undefined,
     routingKey: projectRef,
     isLimited,
   })
