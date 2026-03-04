@@ -1,0 +1,175 @@
+import { AlertCircle } from 'lucide-react'
+
+import { SupportCategories } from '@supabase/shared-types/out/constants'
+import { useFlag, useParams } from 'common'
+import { SupportLink } from 'components/interfaces/Support/SupportLink'
+import { InlineLinkClassName } from 'components/ui/InlineLink'
+import { UpgradeToPro } from 'components/ui/UpgradeToPro'
+import {
+  useCustomDomainsQuery,
+  type CustomDomainsData,
+} from 'data/custom-domains/custom-domains-query'
+import { useProjectAddonsQuery } from 'data/subscriptions/project-addons-query'
+import { useTranslation } from 'react-i18next'
+import { useSelectedOrganizationQuery } from 'hooks/misc/useSelectedOrganization'
+import { Card, CardContent } from 'ui'
+import {
+  PageSection,
+  PageSectionContent,
+  PageSectionDescription,
+  PageSectionMeta,
+  PageSectionSummary,
+  PageSectionTitle,
+} from 'ui-patterns/PageSection'
+import CustomDomainActivate from './CustomDomainActivate'
+import CustomDomainDelete from './CustomDomainDelete'
+import CustomDomainVerify from './CustomDomainVerify'
+import CustomDomainsConfigureHostname from './CustomDomainsConfigureHostname'
+import CustomDomainsShimmerLoader from './CustomDomainsShimmerLoader'
+
+export const CustomDomainConfig = () => {
+  const { t } = useTranslation()
+  const { ref } = useParams()
+  const { data: organization } = useSelectedOrganizationQuery()
+
+  const customDomainsDisabledDueToQuota = useFlag('customDomainsDisabledDueToQuota')
+
+  const plan = organization?.plan?.id
+
+  const { data: addons, isPending: isLoadingAddons } = useProjectAddonsQuery({ projectRef: ref })
+  const hasCustomDomainAddon = !!addons?.selected_addons.find((x) => x.type === 'custom_domain')
+
+  const {
+    data: customDomainData,
+    isPending: isCustomDomainsLoading,
+    isError,
+    isSuccess,
+    status: customDomainStatus,
+  } = useCustomDomainsQuery(
+    { projectRef: ref },
+    {
+      refetchInterval: (query) => {
+        const data = query.state.data
+        // while setting up the ssl certificate, we want to poll every 5 seconds
+        if (data?.customDomain?.ssl.status) {
+          return 10000 // 10 seconds
+        }
+
+        return false
+      },
+    }
+  )
+
+  const { status } = customDomainData || {}
+
+  return (
+    <PageSection id="custom-domains">
+      <PageSectionMeta>
+        <PageSectionSummary>
+          <PageSectionTitle>{t('settings.general.custom_domains_title')}</PageSectionTitle>
+          <PageSectionDescription>
+            {t('settings.general.custom_domains_desc')}
+          </PageSectionDescription>
+        </PageSectionSummary>
+      </PageSectionMeta>
+      <PageSectionContent>
+        {isLoadingAddons ? (
+          <Card>
+            <CardContent className="space-y-6">
+              <CustomDomainsShimmerLoader />
+            </CardContent>
+          </Card>
+        ) : !hasCustomDomainAddon ? (
+          <UpgradeToPro
+            primaryText={
+              customDomainsDisabledDueToQuota
+                  ? t('settings.general.custom_domains_disabled_title')
+                  : t('settings.general.custom_domains_pro_addon_title')
+            }
+            secondaryText={
+              customDomainsDisabledDueToQuota
+                  ? t('settings.general.custom_domains_disabled_desc')
+                : plan === 'free'
+                    ? t('settings.general.custom_domains_free_desc')
+                    : t('settings.general.custom_domains_paid_desc')
+            }
+            addon="customDomain"
+            source="customDomain"
+              featureProposition={t('settings.general.custom_domains_enable')}
+            disabled={customDomainsDisabledDueToQuota}
+          />
+        ) : isCustomDomainsLoading ? (
+          <Card>
+            <CardContent className="space-y-6">
+              <CustomDomainsShimmerLoader />
+            </CardContent>
+          </Card>
+        ) : isError ? (
+          <Card>
+            <CardContent className="space-y-6">
+              <div className="flex items-center justify-center space-x-2 py-8">
+                <AlertCircle size={16} strokeWidth={1.5} />
+                <p className="text-sm text-foreground-light">
+                  {t('settings.general.custom_domains_fetch_error')}{' '}
+                  <SupportLink
+                    queryParams={{ projectRef: ref, category: SupportCategories.SALES_ENQUIRY }}
+                    className={InlineLinkClassName}
+                  >
+                    {t('support.contact_support')}
+                  </SupportLink>
+                  .
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+        ) : status === '0_no_hostname_configured' ? (
+          <CustomDomainsConfigureHostname />
+        ) : (
+          <Card>
+            <CardContent className="p-0">
+              {isSuccess ? (
+                <div className="flex flex-col">
+                  {(status === '1_not_started' ||
+                    status === '2_initiated' ||
+                    status === '3_challenge_verified') && <CustomDomainVerify />}
+
+                  {customDomainData.status === '4_origin_setup_completed' && (
+                    <CustomDomainActivate
+                      projectRef={ref}
+                      customDomain={customDomainData.customDomain}
+                    />
+                  )}
+
+                  {customDomainData.status === '5_services_reconfigured' && (
+                    <CustomDomainDelete
+                      projectRef={ref}
+                      customDomain={customDomainData.customDomain}
+                    />
+                  )}
+                </div>
+              ) : (
+                <CustomDomainConfigFallthrough
+                  fetchStatus={customDomainStatus}
+                  data={customDomainData}
+                />
+              )}
+            </CardContent>
+          </Card>
+        )}
+      </PageSectionContent>
+    </PageSection>
+  )
+}
+
+interface CustomDomainConfigFallthroughProps {
+  fetchStatus: 'error' | 'success' | 'pending'
+  data: CustomDomainsData | undefined
+}
+
+function CustomDomainConfigFallthrough({ fetchStatus, data }: CustomDomainConfigFallthroughProps) {
+  console.error(`Failing to display UI for custom domains:
+Fetch status: ${fetchStatus}
+Custom domain status: ${data?.status}`)
+
+  return null
+}

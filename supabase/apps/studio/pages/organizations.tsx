@@ -1,0 +1,127 @@
+import { Plus, Search } from 'lucide-react'
+import Link from 'next/link'
+import { useRouter } from 'next/router'
+import { useEffect, useState } from 'react'
+
+import { useParams } from 'common'
+import { NoOrganizationsState } from 'components/interfaces/Home/ProjectList/EmptyStates'
+import { OrganizationCard } from 'components/interfaces/Organization/OrganizationCard'
+import AppLayout from 'components/layouts/AppLayout/AppLayout'
+import DefaultLayout from 'components/layouts/DefaultLayout'
+import { PageLayout } from 'components/layouts/PageLayout/PageLayout'
+import { ScaffoldContainer, ScaffoldSection } from 'components/layouts/Scaffold'
+import AlertError from 'components/ui/AlertError'
+import { NoSearchResults } from 'components/ui/NoSearchResults'
+import { useOrganizationsQuery } from 'data/organizations/organizations-query'
+import { useIsFeatureEnabled } from 'hooks/misc/useIsFeatureEnabled'
+import { withAuth } from 'hooks/misc/withAuth'
+import type { NextPageWithLayout } from 'types'
+import { Trans, useTranslation } from 'react-i18next'
+import { Button, Skeleton } from 'ui'
+import i18nInstance from 'lib/i18n/config'
+import { Admonition } from 'ui-patterns/admonition'
+import { Input } from 'ui-patterns/DataInputs/Input'
+
+const OrganizationsPage: NextPageWithLayout = () => {
+  const { t } = useTranslation()
+  const router = useRouter()
+  const [search, setSearch] = useState('')
+  const { error: orgNotFoundError, org: orgSlug } = useParams()
+  const orgNotFound = orgNotFoundError === 'org_not_found'
+
+  const {
+    data: organizations = [],
+    error,
+    isPending: isLoading,
+    isError,
+    isSuccess,
+  } = useOrganizationsQuery()
+
+  const organizationCreationEnabled = useIsFeatureEnabled('organizations:create')
+  const filteredOrganizations =
+    search.length === 0
+      ? organizations
+      : organizations?.filter(
+          (x) => x.name.toLowerCase().includes(search) || x.slug.toLowerCase().includes(search)
+        )
+
+  useEffect(() => {
+    // If there are no organizations, force the user to create one
+    // unless the user is on the not found page
+    if (isSuccess && organizations.length <= 0 && !orgNotFound) {
+      router.push('/new')
+    }
+  }, [isSuccess, organizations])
+
+  return (
+    <ScaffoldContainer>
+      <ScaffoldSection isFullWidth className="flex flex-col gap-y-4">
+        {orgNotFound && (
+          <Admonition
+            type="destructive"
+            title={t('organizations.not_found')}
+            description={
+              <Trans
+                i18nKey="organizations.not_found_description"
+                values={{ slug: orgSlug }}
+                components={{ 1: <code className="text-code-inline" /> }}
+              />
+            }
+          />
+        )}
+
+        {organizations.length > 0 && (
+          <div className="flex items-center justify-between gap-x-2 md:gap-x-3">
+            <Input
+              size="tiny"
+              placeholder={t('organizations.search_placeholder')}
+              icon={<Search />}
+              className="w-full flex-1 md:w-64"
+              value={search}
+              onChange={(event: any) => setSearch(event.target.value)}
+            />
+
+            {organizationCreationEnabled && (
+              <Button asChild icon={<Plus />} type="primary" className="w-min">
+                <Link href={`/new`}>{t('organizations.new_organization')}</Link>
+              </Button>
+            )}
+          </div>
+        )}
+
+        {isSuccess && organizations.length === 0 && !isError && <NoOrganizationsState />}
+
+        {search.length > 0 && filteredOrganizations.length === 0 && (
+          <NoSearchResults searchString={search} />
+        )}
+
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+          {isLoading && (
+            <>
+              <Skeleton className="h-[70px] rounded-md" />
+              <Skeleton className="h-[70px] rounded-md" />
+              <Skeleton className="h-[70px] rounded-md" />
+            </>
+          )}
+          {isError && <AlertError error={error} subject={t('organizations.failed_to_load')} />}
+          {isSuccess &&
+            filteredOrganizations.map((org) => (
+              <OrganizationCard key={org.id} organization={org} />
+            ))}
+        </div>
+      </ScaffoldSection>
+    </ScaffoldContainer>
+  )
+}
+
+OrganizationsPage.getLayout = (page) => (
+  <AppLayout>
+    <DefaultLayout hideMobileMenu headerTitle={i18nInstance.t('organizations.header_title')}>
+      <PageLayout title={i18nInstance.t('organizations.title')} className="max-w-[1200px] lg:px-6 mx-auto">
+        {page}
+      </PageLayout>
+    </DefaultLayout>
+  </AppLayout>
+)
+
+export default withAuth(OrganizationsPage)
