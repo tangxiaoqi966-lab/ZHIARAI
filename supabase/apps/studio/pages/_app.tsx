@@ -187,6 +187,8 @@ function CustomApp({ Component, pageProps }: AppPropsWithLayout) {
                       <meta name="viewport" content="initial-scale=1.0, width=device-width" />
                       <meta property="og:image" content={`${BASE_PATH}/img/supabase-logo.png`} />
                       <meta name="googlebot" content="notranslate" />
+                      <meta name="google" content="notranslate" />
+                      <meta http-equiv="Content-Language" content="en" />
                       {/* [Alaister]: This has to be an inline style tag here and not a separate component due to next/font */}
                       <style
                         dangerouslySetInnerHTML={{
