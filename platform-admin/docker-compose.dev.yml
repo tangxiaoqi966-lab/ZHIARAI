@@ -1,0 +1,69 @@
+version: '3.8'
+
+services:
+  # 开发数据库
+  postgres:
+    image: postgres:15
+    environment:
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: supabase_platform_dev
+    ports:
+      - "5433:5432"
+    volumes:
+      - ./data/postgres:/var/lib/postgresql/data
+      - ./init-platform.sql:/docker-entrypoint-initdb.d/01-platform.sql
+    networks:
+      - platform_dev_network
+
+  # 开发后端（热重载）
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.dev
+    environment:
+      NODE_ENV: development
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: supabase_platform_dev
+      DB_USER: postgres
+      DB_PASSWORD: postgres
+      JWT_SECRET: dev-jwt-secret-key
+      PORT: 3001
+      API_AUTH_ENABLED: false
+      API_KEY: development-key-no-auth-required
+    ports:
+      - "3003:3001"
+    volumes:
+      - ./backend/src:/app/src
+      - ./backend/package.json:/app/package.json
+    depends_on:
+      - postgres
+    networks:
+      - platform_dev_network
+    command: npm run dev
+
+  # 开发前端（热重载）
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.dev
+    environment:
+      VITE_API_URL: http://backend:3001
+      NODE_ENV: development
+    ports:
+      - "3002:3000"
+    volumes:
+      - ./frontend/src:/app/src
+      - ./frontend/public:/app/public
+      - ./frontend/package.json:/app/package.json
+      - ./frontend/index.html:/app/index.html
+      - ./frontend/vite.config.ts:/app/vite.config.ts
+    depends_on:
+      - backend
+    networks:
+      - platform_dev_network
+    command: npm run dev
+
+networks:
+  platform_dev_network:
+    driver: bridge
